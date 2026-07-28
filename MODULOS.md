@@ -21,7 +21,14 @@ DbContext, csproj, componentes atómicos del front, etc.), que ya están en la b
    IMfaSecretProtector, IIntegracionConfigService.
 2. **DbContext** (`DocFlowDbContext`): DbSets de OrdenCompra/Items/Adjuntos y aplicar
    las EF configs de OrdenesCompra.
-3. **Migraciones**: aplicar las de OC (ordenes_compra, codigo_mercado_publico, xmin).
+3. **Base de datos** (`db/DocFlow-schema.sql`): script SQL **idempotente del modelo
+   completo** (PostgreSQL), generado con `dotnet ef migrations script --idempotent`.
+   Crea todo el esquema (`CREATE TABLE IF NOT EXISTS ...`) y guarda cada paso en
+   `__EFMigrationsHistory`. Aplicalo sobre una base limpia para levantar el esquema
+   completo. Si lo corrés sobre una base que YA tiene tablas con otra historia de
+   migraciones, revisá primero: las guardas son por ID de migración, no por existencia
+   de tabla. (No se incluyen las migraciones .cs ni el ModelSnapshot: este script es la
+   fuente única del esquema.)
 4. **Rutas front** (`ui/src/routes`): registrar `/ordenes-compra` y las de admin.
 5. **Catálogo de permisos backend** (`PermissionCatalog` + seeder + PermisosDto): los 4
    permisos `ordenescompra.*` deben existir en ambos lados (hay drift guards que lo validan).
