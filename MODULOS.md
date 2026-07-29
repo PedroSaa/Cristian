@@ -60,12 +60,24 @@ DbContext, csproj, componentes atómicos del front, etc.), que ya están en la b
    Para firma de usuario hay que agregar la clave `Security:FirmaEncryptionKey` (AES, mín.
    32 chars) usada para cifrar en reposo la clave de firma. Ejemplo en `appsettings.Development.json`:
    `"Security": { "MfaEncryptionKey": "<32+ chars>", "FirmaEncryptionKey": "<32+ chars>" }`.
-8. **Dependencia front nueva**: `pdfjs-dist` (ya está en `package.json`/`package-lock.json`
+7. **Dependencia front nueva**: `pdfjs-dist` (ya está en `package.json`/`package-lock.json`
    incluidos) — la usa `PlantillaMedidasEditor` para la preview del PDF. Correr `npm install`.
-7. **Front compartido**: se incluye `ui/src/pages/ProfilePage.tsx` (+test) para mostrar
-   el enganche de la firma desde **Mi Perfil**, pero depende de archivos compartidos que
-   viven en la base y NO están en el recorte: `contexts/AuthContext`, `contexts/ToastContext`,
-   `hooks/usePasswordPolicy`, `lib/api/auth`, `lib/validations/auth`, `molecules/FormField`,
-   `components/atoms` (Button/Input/Badge/Spinner/Divider) y `organisms/ModalDialog`. También
-   `atoms/Icon` (íconos `Signature`/`Workflow`) vive en la base. Sí se incluye
-   `molecules/SearchableSelect` por ser dependencia directa del editor de flujo.
+8. **Base compartida (front y backend) — no incluida salvo lo que agregamos.** Como todo
+   el recorte, nuestro código se apoya en la base común de DocFlow-Infinity que YA existe
+   del lado de Pedro. No es que falte "por accidente": son las mismas piezas que el resto
+   del recorte ya usa. En concreto, nuestro código nuevo consume de la base:
+   - **Front UI**: `components/atoms` (Button, Input, Badge, Spinner, Divider, IconButton,
+     Toggle, Tooltip), `molecules/FormField`, `molecules/Pagination`,
+     `organisms/ModalDialog`, `organisms/ConfirmDialog`, `organisms/PlantillaEditor`.
+   - **Front infra**: `contexts/AuthContext`, `contexts/ToastContext`,
+     `hooks/usePasswordPolicy`, `lib/api/auth`, `lib/api/catalogos`, `lib/validations/auth`.
+   - **Backend**: `ICurrentUser`, base MediatR (`ISender`) y `ControllerBase` de ASP.NET
+     (los controllers no dependen de una clase base propia).
+
+   **Incluido a propósito** para que lo nuestro funcione: `atoms/Icon` (íconos
+   `Signature`/`Workflow`), `molecules/SearchableSelect` (buscador del editor de flujo),
+   `pages/ProfilePage.tsx` (+test, enganche de firma en Mi Perfil), `DocFlowDbContext.cs`,
+   `DependencyInjection.cs` y `package.json`/`package-lock.json`.
+
+   Verificado: ninguna referencia de nuestro código nuevo queda colgando fuera de esta
+   base compartida; todo lo propio (apis, repos, interfaces, entidades) está en el recorte.
