@@ -29,14 +29,21 @@ DbContext, csproj, componentes atómicos del front, etc.), que ya están en la b
   del flujo la consume otro módulo.
 
 ## Al integrar sobre la base, hay que enganchar el wiring compartido:
-1. **DI** (`DocFlow.Infrastructure/DependencyInjection.cs`): registrar servicios de OC
-   (IMercadoPublicoService/HttpClient tipado, IOrdenCompraRepository, PDF/numeración),
-   IMfaSecretProtector, IIntegracionConfigService. Para los módulos nuevos: registrar
-   `IFirmaClaveProtector`→`FirmaClaveProtector`, `IFirmaUsuarioRepository`,
+
+> **Nota:** `DependencyInjection.cs`, `DocFlowDbContext.cs`, `ui/package.json`,
+> `ui/package-lock.json` y `ui/src/components/atoms/Icon.tsx` **ya vienen incluidos**
+> en este recorte para que lo nuestro funcione al integrarlo. Son archivos **de toda la
+> app** (no solo de estos módulos): aplicalos sobre la MISMA base DocFlow-Infinity. Si tu
+> base difiere, usalos como referencia y aplicá solo el delta descrito abajo.
+
+1. **DI** (`DocFlow.Infrastructure/DependencyInjection.cs`, incluido): además de los
+   servicios de OC (IMercadoPublicoService/HttpClient tipado, IOrdenCompraRepository,
+   PDF/numeración), IMfaSecretProtector e IIntegracionConfigService, registra los módulos
+   nuevos: `IFirmaClaveProtector`→`FirmaClaveProtector`, `IFirmaUsuarioRepository`,
    `IPlantillaFlujoRepository` e `IResponsableFlujoNombreResolver`.
-2. **DbContext** (`DocFlowDbContext`): DbSets de OrdenCompra/Items/Adjuntos y aplicar
-   las EF configs de OrdenesCompra. Para los módulos nuevos: DbSets de `FirmaUsuario` y
-   `PlantillaFlujoPaso` y aplicar `FirmaUsuarioConfiguration` y `PlantillaFlujoPasoConfiguration`.
+2. **DbContext** (`DocFlowDbContext`, incluido): DbSets de OrdenCompra/Items/Adjuntos +
+   DbSets de `FirmaUsuario` y `PlantillaFlujoPaso`, y aplica sus EF configs
+   (`FirmaUsuarioConfiguration`, `PlantillaFlujoPasoConfiguration`).
 3. **Base de datos** (`db/DocFlow-schema.sql`): script SQL **idempotente del modelo
    completo** (PostgreSQL), generado con `dotnet ef migrations script --idempotent`.
    Crea todo el esquema (`CREATE TABLE IF NOT EXISTS ...`) y guarda cada paso en
@@ -48,9 +55,13 @@ DbContext, csproj, componentes atómicos del front, etc.), que ya están en la b
 4. **Rutas front** (`ui/src/routes`): registrar `/ordenes-compra` y las de admin.
 5. **Catálogo de permisos backend** (`PermissionCatalog` + seeder + PermisosDto): los 4
    permisos `ordenescompra.*` deben existir en ambos lados (hay drift guards que lo validan).
-6. **appsettings**: sección `MercadoPublico` (Ticket, BaseUrl, CodigoOrganismo) — se
-   configura en runtime desde Admin → Integraciones. Para firma de usuario: clave
-   `Security:FirmaEncryptionKey` (AES) para el cifrado en reposo de la clave de firma.
+6. **appsettings** (NO incluido — secretos, repo público): sección `MercadoPublico`
+   (Ticket, BaseUrl, CodigoOrganismo) se configura en runtime desde Admin → Integraciones.
+   Para firma de usuario hay que agregar la clave `Security:FirmaEncryptionKey` (AES, mín.
+   32 chars) usada para cifrar en reposo la clave de firma. Ejemplo en `appsettings.Development.json`:
+   `"Security": { "MfaEncryptionKey": "<32+ chars>", "FirmaEncryptionKey": "<32+ chars>" }`.
+8. **Dependencia front nueva**: `pdfjs-dist` (ya está en `package.json`/`package-lock.json`
+   incluidos) — la usa `PlantillaMedidasEditor` para la preview del PDF. Correr `npm install`.
 7. **Front compartido**: se incluye `ui/src/pages/ProfilePage.tsx` (+test) para mostrar
    el enganche de la firma desde **Mi Perfil**, pero depende de archivos compartidos que
    viven en la base y NO están en el recorte: `contexts/AuthContext`, `contexts/ToastContext`,
