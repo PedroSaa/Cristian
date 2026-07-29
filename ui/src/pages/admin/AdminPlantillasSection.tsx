@@ -8,6 +8,11 @@ import IconButton from '../../components/atoms/IconButton';
 import FormField from '../../components/molecules/FormField';
 import ModalDialog from '../../components/organisms/ModalDialog';
 import PlantillaEditor from '../../components/organisms/PlantillaEditor';
+import PlantillaMedidasEditor, {
+  toCoordinate,
+  type MedidaRow,
+} from '../../components/organisms/PlantillaMedidasEditor';
+import PlantillaFlujoEditor from '../../components/organisms/PlantillaFlujoEditor';
 import LegacyCrudSection from './LegacyCrudSection';
 import { useHasPermission } from '../../hooks/usePermissions';
 import { useToast } from '../../contexts/ToastContext';
@@ -17,6 +22,7 @@ import {
   deleteSeForpla,
   getPlantillaEditorConfig,
   getPlantillaMedidas,
+  getPlantillaPdf,
   forcePlantillaSave,
   listCatalogoCategorias,
   listCatalogoSubcategorias,
@@ -182,30 +188,6 @@ const schema = z
 type FormData = z.infer<typeof schema>;
 type Mode = 'crear' | 'editar' | null;
 
-/**
- * Fila editable del modal de medidas. Las coordenadas se editan como texto para
- * permitir borrar el campo mientras se escribe; se normalizan al guardar.
- */
-interface MedidaRow {
-  idForplaMed: number;
-  objeto: string;
-  x: string;
-  y: string;
-  ancho: string;
-  alto: string;
-}
-
-const QRFIRMA_OBJETO = 'QRFIRMA';
-/** El legacy persiste QRFIRMA siempre con alto/ancho fijos en 200. */
-const QRFIRMA_TAMANO_FIJO = 200;
-const MEDIDA_MAX = 32767;
-
-function toCoordinate(value: string): number {
-  const parsed = Math.trunc(Number(value));
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Math.min(parsed, MEDIDA_MAX);
-}
-
 export default function AdminPlantillasSection() {
   const canEdit = useHasPermission(PERMISSIONS.ADMIN_CATALOGOS_EDITAR);
   const qc = useQueryClient();
@@ -219,6 +201,7 @@ export default function AdminPlantillasSection() {
   const [closingEditor, setClosingEditor] = useState(false);
   const [medidasItem, setMedidasItem] = useState<SeForplaDto | null>(null);
   const [medidasRows, setMedidasRows] = useState<MedidaRow[]>([]);
+  const [flujoItem, setFlujoItem] = useState<SeForplaDto | null>(null);
 
   const form = useForm<FormData>({ resolver: zodResolver(schema) as any });
   const { data, isLoading, isError } = useQuery({ queryKey: ['admin-catalogos', 'plantillas'], queryFn: listSeForpla });
@@ -353,8 +336,8 @@ export default function AdminPlantillasSection() {
         idForplaMed: row.idForplaMed,
         x: toCoordinate(row.x),
         y: toCoordinate(row.y),
-        ancho: row.objeto === QRFIRMA_OBJETO ? QRFIRMA_TAMANO_FIJO : toCoordinate(row.ancho),
-        alto: row.objeto === QRFIRMA_OBJETO ? QRFIRMA_TAMANO_FIJO : toCoordinate(row.alto),
+        ancho: toCoordinate(row.ancho),
+        alto: toCoordinate(row.alto),
       })),
     });
   }
@@ -403,7 +386,10 @@ export default function AdminPlantillasSection() {
         onEdit={openEdit}
         onEditContent={openEditorContent}
         extraActions={(item) => canEdit && (
-          <IconButton name="ruler" tooltip="Medidas" appearance="admin" onClick={() => openMedidas(item)} />
+          <>
+            <IconButton name="ruler" tooltip="Medidas" appearance="admin" onClick={() => openMedidas(item)} />
+            <IconButton name="workflow" tooltip="Flujo" appearance="admin" onClick={() => setFlujoItem(item)} />
+          </>
         )}
         onDelete={(item) => setDeleting(item)}
         onView={openTemplatePdf}
@@ -525,7 +511,7 @@ export default function AdminPlantillasSection() {
           open
           title="Medidas de la plantilla"
           onClose={() => setMedidasItem(null)}
-          size="lg"
+          size="xl"
           footer={(
             <>
               <Button variant="secondary" onClick={() => setMedidasItem(null)}>Cancelar</Button>
@@ -534,86 +520,26 @@ export default function AdminPlantillasSection() {
           )}
         >
           <p className="mb-3 text-sm text-gray-600">
-            Coordenadas (en puntos del PDF) donde se estampa cada objeto al firmar documentos generados con la plantilla <strong>{medidasItem.nomForm}</strong>.
+            Arrastrá cada objeto sobre la vista del documento o editá las coordenadas (en puntos del PDF) para posicionar
+            dónde se estampa al firmar documentos generados con la plantilla <strong>{medidasItem.nomForm}</strong>.
           </p>
-          <div className="overflow-x-auto rounded border border-gray-200">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                <tr>
-                  <th className="px-4 py-2 text-left">Descripción</th>
-                  <th className="px-4 py-2 text-left">Alto</th>
-                  <th className="px-4 py-2 text-left">Ancho</th>
-                  <th className="px-4 py-2 text-left">X</th>
-                  <th className="px-4 py-2 text-left">Y</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {medidasRows.map((row) => {
-                  const esQrFirma = row.objeto === QRFIRMA_OBJETO;
-                  const inputClass = 'w-24 rounded border border-gray-300 px-2 py-1 text-sm';
-                  const readonlyClass = 'w-24 rounded border border-gray-300 bg-gray-100 px-2 py-1 text-sm text-gray-600';
-                  return (
-                    <tr key={row.idForplaMed}>
-                      <td className="px-4 py-2 font-medium text-gray-700">{row.objeto}</td>
-                      <td className="px-4 py-2">
-                        {esQrFirma ? (
-                          <input aria-label={`Alto ${row.objeto}`} value={String(QRFIRMA_TAMANO_FIJO)} readOnly className={readonlyClass} />
-                        ) : (
-                          <input
-                            aria-label={`Alto ${row.objeto}`}
-                            type="number"
-                            min={0}
-                            max={MEDIDA_MAX}
-                            value={row.alto}
-                            onChange={(e) => updateMedidaRow(row.idForplaMed, 'alto', e.target.value)}
-                            className={inputClass}
-                          />
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        {esQrFirma ? (
-                          <input aria-label={`Ancho ${row.objeto}`} value={String(QRFIRMA_TAMANO_FIJO)} readOnly className={readonlyClass} />
-                        ) : (
-                          <input
-                            aria-label={`Ancho ${row.objeto}`}
-                            type="number"
-                            min={0}
-                            max={MEDIDA_MAX}
-                            value={row.ancho}
-                            onChange={(e) => updateMedidaRow(row.idForplaMed, 'ancho', e.target.value)}
-                            className={inputClass}
-                          />
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        <input
-                          aria-label={`X ${row.objeto}`}
-                          type="number"
-                          min={0}
-                          max={MEDIDA_MAX}
-                          value={row.x}
-                          onChange={(e) => updateMedidaRow(row.idForplaMed, 'x', e.target.value)}
-                          className={inputClass}
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <input
-                          aria-label={`Y ${row.objeto}`}
-                          type="number"
-                          min={0}
-                          max={MEDIDA_MAX}
-                          value={row.y}
-                          onChange={(e) => updateMedidaRow(row.idForplaMed, 'y', e.target.value)}
-                          className={inputClass}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <PlantillaMedidasEditor
+            codForm={medidasItem.codForm}
+            rows={medidasRows}
+            onChange={updateMedidaRow}
+            fetchPdf={getPlantillaPdf}
+          />
         </ModalDialog>
+      )}
+
+      {flujoItem && (
+        <PlantillaFlujoEditor
+          open
+          codForm={flujoItem.codForm}
+          nomForm={flujoItem.nomForm}
+          canEdit={canEdit}
+          onClose={() => setFlujoItem(null)}
+        />
       )}
 
       {deleting && (

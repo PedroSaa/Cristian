@@ -27,6 +27,13 @@ import FormField from '../../components/molecules/FormField';
 import SearchableSelect from '../../components/molecules/SearchableSelect';
 import ModalDialog from '../../components/organisms/ModalDialog';
 import ConfirmDialog from '../../components/organisms/ConfirmDialog';
+import FirmaUsuarioModal, { type FirmaOperations } from '../../components/organisms/FirmaUsuarioModal';
+import {
+  getFirmaMetadata,
+  getFirmaImagen,
+  guardarFirma,
+  eliminarFirma,
+} from '../../lib/api/admin/firmaUsuarioApi';
 import Pagination from '../../components/molecules/Pagination';
 import { useHasPermission } from '../../hooks/usePermissions';
 import { usePasswordPolicy } from '../../hooks/usePasswordPolicy';
@@ -93,6 +100,21 @@ export default function AdminUsuariosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [togglingUser, setTogglingUser] = useState<UsuarioAdminDto | null>(null);
+  const [firmaUser, setFirmaUser] = useState<UsuarioAdminDto | null>(null);
+
+  // Signature operations bound to the selected user's id (admin API). Injected
+  // into the shared FirmaUsuarioModal so it stays transport-agnostic.
+  const firmaUserId = firmaUser?.id ?? null;
+  const firmaOperations = useMemo<FirmaOperations>(() => {
+    const id = firmaUserId ?? '__none__';
+    return {
+      getMetadata: () => getFirmaMetadata(id),
+      getImagen: () => getFirmaImagen(id),
+      guardar: (body) => guardarFirma(id, body),
+      eliminar: () => eliminarFirma(id),
+      cacheKey: ['admin', 'usuarios', 'firma', id] as const,
+    };
+  }, [firmaUserId]);
 
   const [filters, setFilters] = useState<{ rol: string; departamentoId: string; activo: boolean | undefined }>({
     rol: '',
@@ -428,12 +450,12 @@ export default function AdminUsuariosPage() {
                   <th className="px-4 py-2 text-left">Rol</th>
                   <th className="px-4 py-2 text-left">Departamento</th>
                   <th className="px-4 py-2 text-left">Estado</th>
-                  <th className="px-4 py-2 text-left">Acciones</th>
+                  <th className="sticky right-0 bg-gray-50 px-4 py-2 text-left shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.12)]">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {visibleUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
+                  <tr key={user.id} className="group hover:bg-gray-50">
                     <td className="px-4 py-2 font-medium text-gray-800">{user.nombreCompleto}</td>
                     <td className="px-4 py-2 text-gray-600">{user.email}</td>
                     <td className="px-4 py-2 font-mono text-xs text-gray-600">{user.usucod ?? '—'}</td>
@@ -445,7 +467,7 @@ export default function AdminUsuariosPage() {
                         {user.estaBloqueado ? 'Bloqueado' : user.activo ? 'Activo' : 'Inactivo'}
                       </span>
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap">
+                    <td className="sticky right-0 whitespace-nowrap bg-white px-4 py-2 shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.12)] group-hover:bg-gray-50">
                       <div className="flex items-center gap-1">
                         {canEditUsuario && (
                           <IconButton
@@ -453,6 +475,14 @@ export default function AdminUsuariosPage() {
                             tooltip="Editar"
                             appearance="admin"
                             onClick={() => openEditar(user)}
+                          />
+                        )}
+                        {canEditUsuario && (
+                          <IconButton
+                            name="signature"
+                            tooltip="Configurar firma"
+                            appearance="admin"
+                            onClick={() => setFirmaUser(user)}
                           />
                         )}
                         {(() => {
@@ -760,6 +790,14 @@ export default function AdminUsuariosPage() {
           else activarMut.mutate(togglingUser.id);
         }}
         onCancel={() => setTogglingUser(null)}
+      />
+
+      <FirmaUsuarioModal
+        open={firmaUser !== null}
+        operations={firmaOperations}
+        usuarioNombre={firmaUser?.nombreCompleto ?? ''}
+        canEdit={canEditUsuario}
+        onClose={() => setFirmaUser(null)}
       />
     </div>
   );

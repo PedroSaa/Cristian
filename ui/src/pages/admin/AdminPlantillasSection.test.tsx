@@ -17,8 +17,27 @@ vi.mock('../../lib/api/admin/adminCatalogosApi', () => ({
   getPlantillaEditorConfig: vi.fn(),
   forcePlantillaSave: vi.fn(),
   getPlantillaMedidas: vi.fn(),
+  getPlantillaPdf: vi.fn(),
   updatePlantillaMedidas: vi.fn(),
 }));
+
+// pdf.js no puede renderizar en jsdom: mockeamos el módulo y el worker (?url) para que
+// PlantillaMedidasEditor monte sin intentar un render real.
+vi.mock('pdfjs-dist', () => ({
+  GlobalWorkerOptions: { workerSrc: '' },
+  getDocument: vi.fn(() => ({
+    promise: Promise.resolve({
+      numPages: 1,
+      getPage: vi.fn(() =>
+        Promise.resolve({
+          getViewport: vi.fn(({ scale }: { scale: number }) => ({ width: 612 * scale, height: 792 * scale })),
+          render: vi.fn(() => ({ promise: Promise.resolve(), cancel: vi.fn() })),
+        }),
+      ),
+    }),
+  })),
+}));
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'test-worker-url' }));
 
 vi.mock('../../hooks/usePermissions', () => ({
   useHasPermission: vi.fn(),
@@ -90,6 +109,8 @@ describe('AdminPlantillasSection', () => {
         subcatDescripcion: null,
       },
     ]);
+    // Por defecto el PDF de fondo carga bien; los tests que ejercitan el fallback lo sobreescriben.
+    vi.mocked(adminCatalogosApi.getPlantillaPdf).mockResolvedValue(new Blob(['%PDF-1.4 test']));
   });
 
   it('renders view and download actions for each plantilla', async () => {
@@ -213,17 +234,19 @@ describe('AdminPlantillasSection', () => {
     expect(adminCatalogosApi.createSeForpla).not.toHaveBeenCalled();
   });
 
-  it('opens the medidas modal with six rows, hiding QR and locking QRFIRMA size to 200', async () => {
+  const medidasFixture = () => [
+    { idForplaMed: 1, objeto: 'AUTORIZACION', x: 100, y: 170, ancho: 1, alto: 1 },
+    { idForplaMed: 2, objeto: 'NUMERO', x: 100, y: 130, ancho: 0, alto: 0 },
+    { idForplaMed: 3, objeto: 'FIRMA', x: 50, y: 20, ancho: 450, alto: 50 },
+    { idForplaMed: 4, objeto: 'QR', x: 0, y: 0, ancho: 0, alto: 0 },
+    { idForplaMed: 5, objeto: 'FOTOFIRMA', x: 50, y: 50, ancho: 0, alto: 0 },
+    { idForplaMed: 6, objeto: 'QRFIRMA', x: 1, y: 1, ancho: 0, alto: 0 },
+    { idForplaMed: 7, objeto: 'FIRMAGOBx', x: 0, y: 0, ancho: 0, alto: 0 },
+  ];
+
+  it('opens the medidas editor with a draggable box + numeric row per object, hiding QR; QRFIRMA is editable', async () => {
     vi.mocked(adminCatalogosApi.listSeForpla).mockResolvedValue([plantilla({ nomForm: 'Con Medidas' })]);
-    vi.mocked(adminCatalogosApi.getPlantillaMedidas).mockResolvedValue([
-      { idForplaMed: 1, objeto: 'AUTORIZACION', x: 100, y: 170, ancho: 1, alto: 1 },
-      { idForplaMed: 2, objeto: 'NUMERO', x: 100, y: 130, ancho: 0, alto: 0 },
-      { idForplaMed: 3, objeto: 'FIRMA', x: 50, y: 20, ancho: 450, alto: 50 },
-      { idForplaMed: 4, objeto: 'QR', x: 0, y: 0, ancho: 0, alto: 0 },
-      { idForplaMed: 5, objeto: 'FOTOFIRMA', x: 50, y: 50, ancho: 0, alto: 0 },
-      { idForplaMed: 6, objeto: 'QRFIRMA', x: 1, y: 1, ancho: 0, alto: 0 },
-      { idForplaMed: 7, objeto: 'FIRMAGOBx', x: 0, y: 0, ancho: 0, alto: 0 },
-    ]);
+    vi.mocked(adminCatalogosApi.getPlantillaMedidas).mockResolvedValue(medidasFixture());
 
     renderWithProviders();
 
@@ -231,29 +254,69 @@ describe('AdminPlantillasSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /medidas/i }));
 
     expect(await screen.findByText('Medidas de la plantilla')).toBeInTheDocument();
-    // Legacy column labels.
+    // Numeric panel column headers.
     expect(screen.getByText('Descripción')).toBeInTheDocument();
     expect(screen.getByText('Alto')).toBeInTheDocument();
     expect(screen.getByText('Ancho')).toBeInTheDocument();
     expect(screen.getByText('X')).toBeInTheDocument();
     expect(screen.getByText('Y')).toBeInTheDocument();
-    // Six visible rows; the QR row stays in the database but is never shown.
-    expect(screen.getByText('AUTORIZACION')).toBeInTheDocument();
-    expect(screen.getByText('NUMERO')).toBeInTheDocument();
-    expect(screen.getByText('FIRMA')).toBeInTheDocument();
-    expect(screen.getByText('FOTOFIRMA')).toBeInTheDocument();
-    expect(screen.getByText('QRFIRMA')).toBeInTheDocument();
-    expect(screen.getByText('FIRMAGOBx')).toBeInTheDocument();
-    expect(screen.queryByText('QR')).not.toBeInTheDocument();
-    // QRFIRMA prints with fixed 200x200: size inputs are read-only.
-    expect(screen.getByLabelText('Alto QRFIRMA')).toHaveValue('200');
-    expect(screen.getByLabelText('Alto QRFIRMA')).toHaveAttribute('readonly');
-    expect(screen.getByLabelText('Ancho QRFIRMA')).toHaveValue('200');
-    expect(screen.getByLabelText('Ancho QRFIRMA')).toHaveAttribute('readonly');
-    expect(screen.getByLabelText('X QRFIRMA')).not.toHaveAttribute('readonly');
+    // One draggable box per visible object; the QR row stays in the DB but is never shown.
+    expect(screen.getByTestId('medida-box-AUTORIZACION')).toBeInTheDocument();
+    expect(screen.getByTestId('medida-box-NUMERO')).toBeInTheDocument();
+    expect(screen.getByTestId('medida-box-FIRMA')).toBeInTheDocument();
+    expect(screen.getByTestId('medida-box-FOTOFIRMA')).toBeInTheDocument();
+    expect(screen.getByTestId('medida-box-QRFIRMA')).toBeInTheDocument();
+    expect(screen.getByTestId('medida-box-FIRMAGOBx')).toBeInTheDocument();
+    expect(screen.queryByTestId('medida-box-QR')).not.toBeInTheDocument();
+    // Object name appears both inside the box and in the numeric row.
+    expect(screen.getAllByText('FIRMA')).toHaveLength(2);
+    // QRFIRMA is now fully editable like any other object: size inputs are editable and it
+    // has its own resize handle (no longer locked to 200x200).
+    expect(screen.getByLabelText('Alto QRFIRMA')).not.toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Ancho QRFIRMA')).not.toHaveAttribute('readonly');
+    expect(screen.getByTestId('medida-resize-QRFIRMA')).toBeInTheDocument();
+    expect(screen.getByTestId('medida-resize-FIRMA')).toBeInTheDocument();
   });
 
-  it('saves the six visible medidas, sending 200x200 for QRFIRMA', async () => {
+  it('moves the box when a coordinate input is typed (two-way sync)', async () => {
+    vi.mocked(adminCatalogosApi.listSeForpla).mockResolvedValue([plantilla({ nomForm: 'Con Medidas' })]);
+    vi.mocked(adminCatalogosApi.getPlantillaMedidas).mockResolvedValue(medidasFixture());
+
+    renderWithProviders();
+
+    await screen.findByText('Con Medidas');
+    fireEvent.click(screen.getByRole('button', { name: /medidas/i }));
+    await screen.findByText('Medidas de la plantilla');
+
+    const box = screen.getByTestId('medida-box-FIRMA');
+    const escala = 600 / 612;
+    // FIRMA starts at x=50 → left = 50 * escala.
+    expect(parseFloat(box.style.left)).toBeCloseTo(50 * escala, 1);
+
+    fireEvent.change(screen.getByLabelText('X FIRMA'), { target: { value: '120' } });
+
+    // Typing a number repositions the box: left now reflects x=120.
+    expect(parseFloat(box.style.left)).toBeCloseTo(120 * escala, 1);
+  });
+
+  it('shows a resilient fallback notice when the background PDF fails to load', async () => {
+    vi.mocked(adminCatalogosApi.listSeForpla).mockResolvedValue([plantilla({ nomForm: 'Con Medidas' })]);
+    vi.mocked(adminCatalogosApi.getPlantillaMedidas).mockResolvedValue(medidasFixture());
+    vi.mocked(adminCatalogosApi.getPlantillaPdf).mockRejectedValue(new Error('503 OnlyOffice down'));
+
+    renderWithProviders();
+
+    await screen.findByText('Con Medidas');
+    fireEvent.click(screen.getByRole('button', { name: /medidas/i }));
+    await screen.findByText('Medidas de la plantilla');
+
+    // The notice appears and the editor stays usable (boxes still rendered).
+    expect(await screen.findByText(/no se pudo cargar la vista del documento/i)).toBeInTheDocument();
+    expect(screen.getByTestId('medida-box-FIRMA')).toBeInTheDocument();
+    expect(screen.getByLabelText('X FIRMA')).toBeInTheDocument();
+  });
+
+  it('saves the six visible medidas, sending QRFIRMA with its edited size', async () => {
     vi.mocked(adminCatalogosApi.listSeForpla).mockResolvedValue([plantilla({ nomForm: 'Con Medidas' })]);
     vi.mocked(adminCatalogosApi.getPlantillaMedidas).mockResolvedValue([
       { idForplaMed: 1, objeto: 'AUTORIZACION', x: 100, y: 170, ancho: 1, alto: 1 },
@@ -273,6 +336,9 @@ describe('AdminPlantillasSection', () => {
     await screen.findByText('Medidas de la plantilla');
 
     fireEvent.change(screen.getByLabelText('X FIRMA'), { target: { value: '60' } });
+    // QRFIRMA is editable but square-locked: typing only Ancho mirrors Alto (stays square).
+    fireEvent.change(screen.getByLabelText('Ancho QRFIRMA'), { target: { value: '150' } });
+    expect(screen.getByLabelText('Alto QRFIRMA')).toHaveValue(150);
     fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
 
     await vi.waitFor(() => expect(adminCatalogosApi.updatePlantillaMedidas).toHaveBeenCalledTimes(1));
@@ -282,7 +348,7 @@ describe('AdminPlantillasSection', () => {
     expect(items).toHaveLength(6);
     expect(items.find((i) => i.idForplaMed === 4)).toBeUndefined();
     expect(items.find((i) => i.idForplaMed === 3)).toEqual({ idForplaMed: 3, x: 60, y: 20, ancho: 450, alto: 50 });
-    expect(items.find((i) => i.idForplaMed === 6)).toEqual({ idForplaMed: 6, x: 1, y: 1, ancho: 200, alto: 200 });
+    expect(items.find((i) => i.idForplaMed === 6)).toEqual({ idForplaMed: 6, x: 1, y: 1, ancho: 150, alto: 150 });
   });
 
   it('shows the association as read-only when editing', async () => {
