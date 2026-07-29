@@ -51,7 +51,10 @@ DbContext, csproj, componentes atómicos del front, etc.), que ya están en la b
 6. **appsettings**: sección `MercadoPublico` (Ticket, BaseUrl, CodigoOrganismo) — se
    configura en runtime desde Admin → Integraciones. Para firma de usuario: clave
    `Security:FirmaEncryptionKey` (AES) para el cifrado en reposo de la clave de firma.
-7. **Front compartido no incluido**: la firma desde **Mi Perfil** se engancha en
-   `ui/src/pages/ProfilePage.tsx` y los botones de flujo/medidas usan `atoms/Icon`
-   (íconos `Signature`/`Workflow`); esos archivos compartidos viven en la base. Sí se
-   incluye `molecules/SearchableSelect` por ser dependencia directa del editor de flujo.
+7. **Front compartido**: se incluye `ui/src/pages/ProfilePage.tsx` (+test) para mostrar
+   el enganche de la firma desde **Mi Perfil**, pero depende de archivos compartidos que
+   viven en la base y NO están en el recorte: `contexts/AuthContext`, `contexts/ToastContext`,
+   `hooks/usePasswordPolicy`, `lib/api/auth`, `lib/validations/auth`, `molecules/FormField`,
+   `components/atoms` (Button/Input/Badge/Spinner/Divider) y `organisms/ModalDialog`. También
+   `atoms/Icon` (íconos `Signature`/`Workflow`) vive en la base. Sí se incluye
+   `molecules/SearchableSelect` por ser dependencia directa del editor de flujo.
