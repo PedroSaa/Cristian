@@ -1,6 +1,8 @@
 using DocFlow.Api.Filters;
 using DocFlow.Application.Admin.CatalogosLegado.Commands.ActualizarSeForpla;
 using DocFlow.Application.Admin.CatalogosLegado.Commands.ActualizarSeForplaMedidas;
+using DocFlow.Application.Admin.CatalogosLegado.Commands.ReemplazarPlantillaFlujo;
+using DocFlow.Application.Admin.CatalogosLegado.Queries.GetPlantillaFlujo;
 using DocFlow.Application.Admin.CatalogosLegado.Commands.CrearSeForpla;
 using DocFlow.Application.Admin.CatalogosLegado.Commands.EliminarSeForpla;
 using DocFlow.Application.Admin.CatalogosLegado.DTOs;
@@ -360,6 +362,47 @@ public class AdminCatalogosPlantillasController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Devuelve el flujo (pasos ordenados) configurado para la plantilla. Este endpoint es el
+    /// que consume el equipo de ejecución del flujo. Lista vacía si la plantilla no tiene flujo.
+    /// </summary>
+    [HttpGet("{codForm}/flujo")]
+    [HasPermission("admin.catalogos.ver")]
+    [ProducesResponseType(typeof(IReadOnlyList<PlantillaFlujoPasoDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetFlujo(string codForm, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetPlantillaFlujoQuery(codForm), ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Reemplaza por completo el flujo de la plantilla con los pasos recibidos y devuelve el
+    /// flujo resultante (con los nombres de responsables resueltos best-effort).
+    /// </summary>
+    [HttpPut("{codForm}/flujo")]
+    [HasPermission("admin.catalogos.editar")]
+    [ProducesResponseType(typeof(IReadOnlyList<PlantillaFlujoPasoDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateFlujo(
+        string codForm, [FromBody] ReemplazarPlantillaFlujoRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(
+                new ReemplazarPlantillaFlujoCommand(codForm, req.Pasos), ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { mensaje = ex.Message });
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            return BadRequest(new { mensaje = ex.Message });
+        }
+    }
+
     [HttpDelete("{codForm}")]
     [HasPermission("admin.catalogos.editar")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -383,3 +426,4 @@ public record OnlyOfficeEditorCallbackRequest(int Status, string? Url = null, st
 public record CrearSeForplaRequest(string TipoSeleccion, short? TipoCod, int? CatCod, short? IdSubcategoria, string FileName, string BlobForm, string? ObsForm = null);
 public record ActualizarSeForplaRequest(string? FileName = null, string? BlobForm = null, string? ObsForm = null);
 public record ActualizarSeForplaMedidasRequest(List<ActualizarSeForplaMedidaItem> Items);
+public record ReemplazarPlantillaFlujoRequest(IReadOnlyList<PlantillaFlujoPasoInput> Pasos);

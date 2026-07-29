@@ -327,6 +327,19 @@ export async function updatePlantillaMedidas(
   await http.put(`/admin/catalogos/plantillas/${encodeURIComponent(codForm)}/medidas`, { items });
 }
 
+/**
+ * Descarga la plantilla renderizada a PDF (via OnlyOffice) para usarla como fondo del
+ * editor visual de medidas. Devuelve el Blob crudo; puede fallar con 500/503 si el
+ * Document Server no está disponible, en cuyo caso el editor cae al fondo en blanco.
+ */
+export async function getPlantillaPdf(codForm: string): Promise<Blob> {
+  const { data } = await http.get<Blob>(
+    `/admin/catalogos/plantillas/${encodeURIComponent(codForm)}/pdf`,
+    { responseType: 'blob' },
+  );
+  return data;
+}
+
 export async function listSeCorfor(): Promise<SeCorforDto[]> {
   const { data } = await http.get<SeCorforDto[]>('/admin/catalogos/correlativos');
   return data;

@@ -2630,5 +2630,76 @@ BEGIN
     VALUES ('20260706121902_AgregarConcurrenciaXminOrdenCompra', '9.0.4');
     END IF;
 END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260724122004_AgregarFirmaUsuario') THEN
+    CREATE TABLE docflow.firmas_usuario (
+        id uuid NOT NULL,
+        usuario_id uuid NOT NULL,
+        imagen_firma bytea NOT NULL,
+        content_type character varying(100) NOT NULL,
+        clave_cifrada text,
+        sigla character varying(50),
+        creado_en timestamp with time zone NOT NULL,
+        actualizado_en timestamp with time zone NOT NULL,
+        CONSTRAINT "PK_firmas_usuario" PRIMARY KEY (id),
+        CONSTRAINT "FK_firmas_usuario_seusuari_usuario_id" FOREIGN KEY (usuario_id) REFERENCES docflow.seusuari (usuario_id) ON DELETE CASCADE
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260724122004_AgregarFirmaUsuario') THEN
+    CREATE UNIQUE INDEX "IX_firmas_usuario_usuario_id" ON docflow.firmas_usuario (usuario_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260724122004_AgregarFirmaUsuario') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260724122004_AgregarFirmaUsuario', '9.0.4');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260728225419_AgregarPlantillaFlujoPasos') THEN
+    CREATE TABLE docflow.plantilla_flujo_pasos (
+        id uuid NOT NULL,
+        cod_form text NOT NULL,
+        orden integer NOT NULL,
+        tipo_accion character varying(30) NOT NULL,
+        responsable_tipo character varying(30) NOT NULL,
+        responsable_id uuid NOT NULL,
+        obligatorio boolean NOT NULL,
+        CONSTRAINT "PK_plantilla_flujo_pasos" PRIMARY KEY (id)
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260728225419_AgregarPlantillaFlujoPasos') THEN
+    CREATE INDEX "IX_plantilla_flujo_pasos_cod_form" ON docflow.plantilla_flujo_pasos (cod_form);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260728225419_AgregarPlantillaFlujoPasos') THEN
+    CREATE UNIQUE INDEX "IX_plantilla_flujo_pasos_cod_form_orden" ON docflow.plantilla_flujo_pasos (cod_form, orden);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20260728225419_AgregarPlantillaFlujoPasos') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20260728225419_AgregarPlantillaFlujoPasos', '9.0.4');
+    END IF;
+END $EF$;
 COMMIT;
 
