@@ -62,22 +62,20 @@ DbContext, csproj, componentes atómicos del front, etc.), que ya están en la b
    `"Security": { "MfaEncryptionKey": "<32+ chars>", "FirmaEncryptionKey": "<32+ chars>" }`.
 7. **Dependencia front nueva**: `pdfjs-dist` (ya está en `package.json`/`package-lock.json`
    incluidos) — la usa `PlantillaMedidasEditor` para la preview del PDF. Correr `npm install`.
-8. **Base compartida (front y backend) — no incluida salvo lo que agregamos.** Como todo
-   el recorte, nuestro código se apoya en la base común de DocFlow-Infinity que YA existe
-   del lado de Pedro. No es que falte "por accidente": son las mismas piezas que el resto
-   del recorte ya usa. En concreto, nuestro código nuevo consume de la base:
-   - **Front UI**: `components/atoms` (Button, Input, Badge, Spinner, Divider, IconButton,
-     Toggle, Tooltip), `molecules/FormField`, `molecules/Pagination`,
-     `organisms/ModalDialog`, `organisms/ConfirmDialog`, `organisms/PlantillaEditor`.
-   - **Front infra**: `contexts/AuthContext`, `contexts/ToastContext`,
-     `hooks/usePasswordPolicy`, `lib/api/auth`, `lib/api/catalogos`, `lib/validations/auth`.
-   - **Backend**: `ICurrentUser`, base MediatR (`ISender`) y `ControllerBase` de ASP.NET
-     (los controllers no dependen de una clase base propia).
-
-   **Incluido a propósito** para que lo nuestro funcione: `atoms/Icon` (íconos
-   `Signature`/`Workflow`), `molecules/SearchableSelect` (buscador del editor de flujo),
-   `pages/ProfilePage.tsx` (+test, enganche de firma en Mi Perfil), `DocFlowDbContext.cs`,
-   `DependencyInjection.cs` y `package.json`/`package-lock.json`.
-
-   Verificado: ninguna referencia de nuestro código nuevo queda colgando fuera de esta
-   base compartida; todo lo propio (apis, repos, interfaces, entidades) está en el recorte.
+8. **Front — cierre completo incluido.** Para que los módulos (Administración, Seguridad,
+   Órdenes de Compra y Mi Perfil) funcionen al integrarlos, el recorte ahora incluye TODO
+   el cierre de dependencias del front: `components/atoms` completo (Button, Input, Select,
+   Checkbox, Radio, Toggle, Tooltip, Badge, Spinner, Divider, IconButton, Avatar, Label,
+   Datepicker, index), `molecules` (FormField, Pagination, SearchBar, AlertToast,
+   BrandingIdentity, SearchableSelect), `organisms` (ModalDialog, ConfirmDialog, DataGrid,
+   TabPanel, PlantillaEditor), `contexts` (AuthContext, ToastContext), `hooks` (usePasswordPolicy,
+   useBranding), `lib/api` (auth, catalogos, proveedores, brandingApi, passwordPolicy),
+   `lib/branding`, `lib/validations`, `types` y `test/utils`. **Verificado: cierre de imports
+   del front sin faltantes (0 dependencias colgando).**
+   Sigue afuera el **shell de la app** (App/main/routing/vite/tsconfig/index.html) — eso lo
+   aporta la base al integrar; solo hay que registrar las rutas.
+9. **Backend — se integra sobre la base.** El DbContext y el DI referencian entidades de
+   TODA la app, así que el backend NO compila como subconjunto: se aplica sobre la MISMA
+   base DocFlow-Infinity, que ya tiene el resto de módulos, `ICurrentUser`, `Program.cs`,
+   `.csproj`, etc. Nuestro delta (módulos + `DocFlowDbContext`/`DependencyInjection`
+   actualizados) va incluido.
